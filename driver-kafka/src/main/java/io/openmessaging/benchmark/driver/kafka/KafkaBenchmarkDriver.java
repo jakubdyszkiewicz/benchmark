@@ -56,6 +56,7 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private Properties topicProperties;
     private Properties producerProperties;
     private Properties consumerProperties;
+    private Properties adminProperties;
 
     private AdminClient admin;
 
@@ -89,10 +90,14 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         consumerProperties.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
+        adminProperties = new Properties();
+        commonProperties.forEach((key, value) -> adminProperties.put(key, value));
+        adminProperties.load(new StringReader(config.adminConfig));
+
         topicProperties = new Properties();
         topicProperties.load(new StringReader(config.topicConfig));
 
-        admin = AdminClient.create(commonProperties);
+        admin = AdminClient.create(adminProperties);
     }
 
     @Override
