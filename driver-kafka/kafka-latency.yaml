@@ -23,7 +23,9 @@ topicConfig: |
   min.insync.replicas=2
 
 commonConfig: |
-  bootstrap.servers=localhost:9092
+  bootstrap.servers=localhost:19072,localhost:19073,localhost:19074
+  security.protocol: SSL
+  ssl.endpoint.identification.algorithm: ""
 
 producerConfig: |
   acks=all

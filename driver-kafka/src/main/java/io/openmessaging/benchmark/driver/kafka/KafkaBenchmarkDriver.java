@@ -21,16 +21,15 @@ import io.openmessaging.benchmark.driver.BenchmarkConsumer;
 import io.openmessaging.benchmark.driver.BenchmarkDriver;
 import io.openmessaging.benchmark.driver.BenchmarkProducer;
 import io.openmessaging.benchmark.driver.ConsumerCallback;
+
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -38,10 +37,14 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+
+import javax.net.ssl.*;
 
 public class KafkaBenchmarkDriver implements BenchmarkDriver {
 
@@ -72,6 +75,8 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
                     applyZoneId(
                             commonProperties.getProperty(KAFKA_CLIENT_ID), System.getProperty(ZONE_ID_CONFIG)));
         }
+
+        commonProperties.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, InsecureSslEngineFactory.class.getName());
 
         producerProperties = new Properties();
         commonProperties.forEach((key, value) -> producerProperties.put(key, value));
@@ -168,4 +173,91 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
     private static final ObjectMapper mapper =
             new ObjectMapper(new YAMLFactory())
                     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+
+    public static class InsecureSslEngineFactory implements SslEngineFactory, Closeable {
+        private SSLContext sslContext;
+
+        public InsecureSslEngineFactory() throws NoSuchAlgorithmException, KeyManagementException {
+            this.sslContext = createInsecureSslContext();
+        }
+
+        private static SSLContext createInsecureSslContext() throws NoSuchAlgorithmException, KeyManagementException {
+            // Create a TrustManager that trusts all certificates
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        @Override
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                            return null;
+                        }
+
+                        @Override
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {
+                            // Trust all clients
+                        }
+
+                        @Override
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {
+                            // Trust all servers
+                        }
+                    }
+            };
+
+            // Initialize the SSL context
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+            return sslContext;
+        }
+
+        @Override
+        public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
+            SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
+            sslEngine.setUseClientMode(true);
+            return sslEngine;
+        }
+
+        @Override
+        public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
+            SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
+            sslEngine.setUseClientMode(false);
+            return sslEngine;
+        }
+
+        @Override
+        public boolean shouldBeRebuilt(Map<String, Object> newConfigs) {
+            // Always return false since this factory doesn't use configuration changes to trigger a rebuild
+            return false;
+        }
+
+        @Override
+        public Set<String> reconfigurableConfigs() {
+            // No reconfigurable configs in this implementation
+            return Collections.emptySet();
+        }
+
+        @Override
+        public KeyStore keystore() {
+            // Return null as we're not using a keystore
+            return null;
+        }
+
+        @Override
+        public KeyStore truststore() {
+            // Return null as we're not using a truststore
+            return null;
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // No specific configuration needed for this insecure factory
+        }
+
+        @Override
+        public void close() throws IOException {
+            // No resources to close
+        }
+    }
+
+
+
 }
