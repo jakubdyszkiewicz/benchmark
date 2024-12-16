@@ -213,6 +213,12 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
             SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
             sslEngine.setUseClientMode(true);
+
+            // Set SNI Hostname
+            SSLParameters sslParameters = sslEngine.getSSLParameters();
+            sslParameters.setServerNames(Collections.singletonList(new SNIHostName(peerHost)));
+            sslEngine.setSSLParameters(sslParameters);
+
             return sslEngine;
         }
 
@@ -220,6 +226,12 @@ public class KafkaBenchmarkDriver implements BenchmarkDriver {
         public SSLEngine createServerSslEngine(String peerHost, int peerPort) {
             SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
             sslEngine.setUseClientMode(false);
+
+            // Set SNI Hostname
+            SSLParameters sslParameters = sslEngine.getSSLParameters();
+            sslParameters.setServerNames(Collections.singletonList(new SNIHostName(peerHost)));
+            sslEngine.setSSLParameters(sslParameters);
+
             return sslEngine;
         }
 
